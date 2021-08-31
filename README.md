@@ -5,6 +5,6 @@
 ## Installation 
 
 ```bash
-go get https://github.com/t-eckert/nb
+go get github.com/t-eckert/nb
 ```
 
