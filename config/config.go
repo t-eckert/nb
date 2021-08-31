@@ -1,7 +1,7 @@
 package config
 
 const editor = "nvim"
-const rootDir = "~/notebook"
+const rootDir = "/Users/thomaseckert/Notebook"
 
 func GetEditor() (string, error) {
 	return editor, nil

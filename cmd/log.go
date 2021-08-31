@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/spf13/cobra"
+	"github.com/t-eckert/nb/editor"
+	noteLog "github.com/t-eckert/nb/log"
 )
 
 // logCmd represents the log command
@@ -18,7 +21,14 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("log called")
+		fileName, err := noteLog.FetchTodaysLog()	
+		if err != nil {
+			log.Fatalf("could not fetch today's log: %v", err)
+		}
+
+		if err = editor.Open(fileName); err != nil {
+			log.Fatalf("could not open %s: %v", fileName, err)
+		}
 	},
 }
 

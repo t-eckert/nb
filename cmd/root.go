@@ -2,10 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
+
 	"github.com/spf13/cobra"
 
 	"github.com/spf13/viper"
+	"github.com/t-eckert/nb/config"
+	"github.com/t-eckert/nb/editor"
 )
 
 var cfgFile string
@@ -14,8 +18,17 @@ var cfgFile string
 var rootCmd = &cobra.Command{
 	Use:   "nb",
 	Short: "NotaBene is a command line application for taking notes",
-	Long: `NotaBene is a command line application for taking notes`,
-	Run: func(cmd *cobra.Command, args []string) { },
+	Long:  `NotaBene is a command line application for taking notes`,
+	Run: func(cmd *cobra.Command, args []string) {
+		rootDir, err := config.GetRootDir()
+		if err != nil {
+			log.Fatalf("Could not get root directory: %v", err)
+		}
+
+		if err = editor.Open(rootDir); err != nil {
+			log.Fatalf("Could not open notebook directory: %v", err)
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

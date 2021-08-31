@@ -10,7 +10,7 @@ func TestGetEditor(t *testing.T) {
 
 	actual, _ := GetEditor()
 
-	if expected != actual{
+	if expected != actual {
 		fmt.Printf("Expected: %s\nReceived: %s\n", expected, actual)
 	}
 }
@@ -20,7 +20,7 @@ func TestGetRootDir(t *testing.T) {
 
 	actual, _ := GetRootDir()
 
-	if expected != actual{
+	if expected != actual {
 		fmt.Printf("Expected: %s\nReceived: %s\n", expected, actual)
 	}
 }
