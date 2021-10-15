@@ -20,16 +20,15 @@ func LogPath(dayOffset int) (string, error) {
 
 func DoesLogExist(logPath string) (bool, error) {
 	_, err := os.Stat(logPath)
+	if err == nil {
+		return true, nil
+	}
 
 	if !os.IsNotExist(err) {
 		return false, err
 	}
 
-	if err != nil {
-		return false, nil
-	}
-
-	return true, nil
+	return false, nil
 }
 
 func GenerateNew(logPath string, dayOffset int) error {
