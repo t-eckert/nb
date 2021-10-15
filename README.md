@@ -5,5 +5,5 @@
 ## Installation
 
 ```bash
-go install github.com/t-eckert/nb@v0.0.1
+go install github.com/t-eckert/nb@v0.0.3
 ```
