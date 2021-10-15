@@ -20,9 +20,18 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		fileName, err := noteLog.FetchTodaysLog()	
+		fileName, err := noteLog.LogPath(0)
 		if err != nil {
 			log.Fatalf("could not fetch today's log: %v", err)
+		}
+
+		logExists, err := noteLog.DoesLogExist(fileName)
+		if err != nil {
+			log.Fatalf("could not check if log exists: %v", err)
+		}
+
+		if !logExists {
+			noteLog.GenerateNew(fileName, 0)
 		}
 
 		if err = editor.Open(fileName); err != nil {
