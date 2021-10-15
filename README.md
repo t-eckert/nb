@@ -2,9 +2,8 @@
 
 `nb` is a command line application for taking notes with markdown.
 
-## Installation 
+## Installation
 
 ```bash
-go get github.com/t-eckert/nb
+go install github.com/t-eckert/nb@v0.0.1
 ```
-
