@@ -2,6 +2,7 @@
 extern crate clap;
 
 use clap::Parser;
+use config::Config;
 use subcmd::{init, log, open, serve};
 
 mod config;
@@ -17,29 +18,25 @@ struct Opts {
 
 #[derive(Parser)]
 enum SubCommand {
-    #[clap(
-        version = "0.1.0",
-        about = "Create a new notebook in the current directory."
-    )]
+    #[clap(about = "Create a new notebook in the current directory.")]
     Init(init::Init),
 
-    #[clap(version = "0.1.0", about = "Open today's log in your editor.")]
+    #[clap(about = "Open today's log in your editor.")]
     Log(log::Log),
 
-    #[clap(version = "0.1.0", about = "Open the notebook in your editor.")]
+    #[clap(about = "Open the notebook in your editor.")]
     Open(open::Open),
 
-    #[clap(version = "0.1.0", about = "Serve the notebook in the browser.")]
+    #[clap(about = "Serve the notebook in the browser.")]
     Serve(serve::Serve),
 }
 
 fn main() {
     let opts: Opts = Opts::parse();
 
-    let config = config::Config {
-        editor_cmd: String::from("nvim"),
-        nb_dir: String::from("~/Notebook"),
-        port: 4000,
+    let config = Config {
+        editor_cmd: "nvim".to_string(),
+        ..Config::default()
     };
 
     match opts.subcmd {
