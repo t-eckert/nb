@@ -1,11 +1,8 @@
 use crate::config::Config;
 
 #[derive(Parser)]
-pub struct Init {
-	#[clap(short, long)]
-	verbose: bool,
-}
+pub struct Init {}
 
 pub fn run(args: Init, config: &Config) {
-	println!("Init not implemented")
+    println!("Init not implemented")
 }
