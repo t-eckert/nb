@@ -20,12 +20,7 @@ var rootCmd = &cobra.Command{
 	Short: "NotaBene is a command line application for taking notes",
 	Long:  `NotaBene is a command line application for taking notes`,
 	Run: func(cmd *cobra.Command, args []string) {
-		rootDir, err := config.GetRootDir()
-		if err != nil {
-			log.Fatalf("Could not get root directory: %v", err)
-		}
-
-		if err = editor.Open(rootDir); err != nil {
+		if err := editor.Open(config.RootDir); err != nil {
 			log.Fatalf("Could not open notebook directory: %v", err)
 		}
 	},

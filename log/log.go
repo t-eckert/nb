@@ -8,14 +8,9 @@ import (
 )
 
 func LogPath(dayOffset int) (string, error) {
-	notesDir, err := config.GetRootDir()
-	if err != nil {
-		return "", err
-	}
-
 	today := formatDate(time.Now().Add(time.Duration(dayOffset) * 24 * time.Hour))
 
-	return notesDir + "/Log/" + today + ".md", nil
+	return config.RootDir + "/Log/" + today + ".md", nil
 }
 
 func DoesLogExist(logPath string) (bool, error) {
@@ -24,6 +19,7 @@ func DoesLogExist(logPath string) (bool, error) {
 		return true, nil
 	}
 
+	// Check if the stat err is something other than "does not exist".
 	if !os.IsNotExist(err) {
 		return false, err
 	}
