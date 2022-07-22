@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -8,9 +9,14 @@ import (
 )
 
 func LogPath(dayOffset int) (string, error) {
+	root, err := config.GetRootDir()
+	if err != nil {
+		return "", err
+	}
+
 	today := formatDate(time.Now().Add(time.Duration(dayOffset) * 24 * time.Hour))
 
-	return config.RootDir + "/Log/" + today + ".md", nil
+	return root + "/Log/" + today + ".md", nil
 }
 
 func DoesLogExist(logPath string) (bool, error) {
@@ -35,9 +41,14 @@ func GenerateNew(logPath string, dayOffset int) error {
 
 	defer f.Close()
 
-	_, err = f.WriteString(
-		"# " + formateDateTitle(time.Now().Add(time.Duration(dayOffset)*24*time.Hour)) + "\n\n" +
-			"## Tasks\n\n" + "## Notes\n\n")
+	template := fmt.Sprintf(`# %s 
+
+## Tasks
+
+
+`, formateDateTitle(time.Now().Add(time.Duration(dayOffset)*24*time.Hour)))
+
+	_, err = f.WriteString(template)
 
 	if err != nil {
 		return err
