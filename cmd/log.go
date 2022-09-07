@@ -4,38 +4,30 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
-	"github.com/t-eckert/nb/editor"
 	noteLog "github.com/t-eckert/nb/log"
 )
 
-// logCmd represents the log command
 var logCmd = &cobra.Command{
 	Use:   "log",
 	Short: "Create and edit daily logs.",
-	Long:  ``,
+	Long: `The log command will create and open a daily log file based on a template.
+
+The offset flag may be passed to edit a daily log offset by the given number of days.
+If a log already exists for a given day, it will be opened.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		fileName, err := noteLog.LogPath(0)
+		open, err := cmd.Flags().GetBool("open")
 		if err != nil {
-			log.Fatalf("could not fetch today's log: %v", err)
+			log.Fatalf(err.Error())
 		}
-
-		logExists, err := noteLog.DoesLogExist(fileName)
-		if err != nil {
-			log.Fatalf("could not check if log exists: %v", err)
-		}
-
-		if !logExists {
-			noteLog.GenerateNew(fileName, 0)
-		}
-
-		if err = editor.Open(fileName); err != nil {
-			log.Fatalf("could not open %s: %v", fileName, err)
+		if err := noteLog.Log(open, args...); err != nil {
+			log.Fatal(err.Error())
 		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(logCmd)
-	logCmd.PersistentFlags().Int("Offset", 0, "Offset")
+
+	logCmd.PersistentFlags().BoolP("open", "o", true, "Whether or not to open the editor to the log.")
 }
