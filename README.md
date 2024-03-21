@@ -1,3 +1,6 @@
+> [!NOTE]
+> I no longer use this. I've moved over to using [Obsidian](obsidian.md) for my note taking. I totally support anyone taking this and running with it if they like. Stay cool 😎.
+
 # *NotaBene* (nb) is a command line application for taking notes and daily logs
 
 `nb` is a command line application for taking notes with markdown.
