@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::collections::BTreeMap;
 
 pub fn get_notebook_path() -> PathBuf {
     env::var("NOTEBOOK_PATH")
@@ -192,6 +193,91 @@ pub fn rollover_todos() -> Result<(), String> {
         unchecked_todos.len(),
         tomorrow.format("%a %-d %B %Y")
     );
+
+    Ok(())
+}
+
+pub fn list_logs(days: usize) -> Result<(), String> {
+    let notebook_path = get_notebook_path();
+    let log_dir = notebook_path.join("Log");
+
+    // Check if Log directory exists
+    if !log_dir.exists() {
+        return Err(format!("Log directory does not exist: {}", log_dir.display()));
+    }
+
+    // Read all files in the Log directory
+    let entries = fs::read_dir(&log_dir)
+        .map_err(|e| format!("Failed to read Log directory: {}", e))?;
+
+    // Parse dates from filenames and store in a sorted map
+    let mut logs: BTreeMap<NaiveDate, PathBuf> = BTreeMap::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+            // Try to parse YYYY-MM-DD.md format
+            if filename.ends_with(".md") {
+                let date_str = filename.trim_end_matches(".md");
+                if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                    logs.insert(date, path);
+                }
+            }
+        }
+    }
+
+    // Calculate the cutoff date
+    let today = Local::now().date_naive();
+    let cutoff_date = today - Duration::days(days as i64 - 1);
+
+    // Filter and display logs
+    let recent_logs: Vec<_> = logs
+        .iter()
+        .filter(|(date, _)| **date >= cutoff_date && **date <= today)
+        .rev()
+        .collect();
+
+    if recent_logs.is_empty() {
+        println!("No logs found in the last {} day(s)", days);
+        return Ok(());
+    }
+
+    println!("Logs from the last {} day(s):\n", days);
+
+    for (date, path) in recent_logs {
+        // Try to read the file and count TODOs
+        let (total_todos, completed_todos) = if let Ok(content) = fs::read_to_string(path) {
+            let total = content.lines().filter(|line| {
+                let trimmed = line.trim_start();
+                trimmed.starts_with("- [ ]") || trimmed.starts_with("- [x]")
+            }).count();
+
+            let completed = content.lines().filter(|line| {
+                line.trim_start().starts_with("- [x]")
+            }).count();
+
+            (total, completed)
+        } else {
+            (0, 0)
+        };
+
+        // Format the output
+        let day_name = date.format("%a").to_string();
+        let date_str = date.format("%Y-%m-%d").to_string();
+
+        let todo_info = if total_todos > 0 {
+            format!("  [{}/{}]", completed_todos, total_todos)
+        } else {
+            String::new()
+        };
+
+        println!("{} ({}){}",
+                 date_str,
+                 day_name,
+                 todo_info);
+    }
 
     Ok(())
 }

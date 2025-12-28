@@ -14,6 +14,7 @@ fn main() {
                 tomorrow,
             } => notebook::edit_log(yesterday, tomorrow),
             LogAction::Rollover => notebook::rollover_todos(),
+            LogAction::List { days } => notebook::list_logs(days),
         },
     };
 

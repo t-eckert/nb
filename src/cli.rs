@@ -31,4 +31,10 @@ pub enum LogAction {
     },
     /// Rollover unfinished TODOs to the next day
     Rollover,
+    /// List recent logs
+    List {
+        /// Number of days to show (default: 7)
+        #[arg(short, long, default_value = "7")]
+        days: usize,
+    },
 }
