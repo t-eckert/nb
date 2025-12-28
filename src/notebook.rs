@@ -197,7 +197,7 @@ pub fn rollover_todos() -> Result<(), String> {
     Ok(())
 }
 
-pub fn list_logs(days: usize) -> Result<(), String> {
+pub fn list_logs(days: usize, show_unfinished: bool) -> Result<(), String> {
     let notebook_path = get_notebook_path();
     let log_dir = notebook_path.join("Log");
 
@@ -248,7 +248,7 @@ pub fn list_logs(days: usize) -> Result<(), String> {
 
     for (date, path) in recent_logs {
         // Try to read the file and count TODOs
-        let (total_todos, completed_todos) = if let Ok(content) = fs::read_to_string(path) {
+        let (total_todos, completed_todos, unchecked_todos) = if let Ok(content) = fs::read_to_string(path) {
             let total = content.lines().filter(|line| {
                 let trimmed = line.trim_start();
                 trimmed.starts_with("- [ ]") || trimmed.starts_with("- [x]")
@@ -258,9 +258,15 @@ pub fn list_logs(days: usize) -> Result<(), String> {
                 line.trim_start().starts_with("- [x]")
             }).count();
 
-            (total, completed)
+            let unchecked: Vec<String> = if show_unfinished {
+                find_unchecked_todos(&content)
+            } else {
+                Vec::new()
+            };
+
+            (total, completed, unchecked)
         } else {
-            (0, 0)
+            (0, 0, Vec::new())
         };
 
         // Format the output
@@ -277,6 +283,13 @@ pub fn list_logs(days: usize) -> Result<(), String> {
                  date_str,
                  day_name,
                  todo_info);
+
+        // Show unfinished TODOs if requested
+        if show_unfinished && !unchecked_todos.is_empty() {
+            for todo in unchecked_todos {
+                println!("  {}", todo.trim());
+            }
+        }
     }
 
     Ok(())
@@ -384,7 +397,7 @@ mod tests {
         unsafe {
             env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
         }
-        let result = list_logs(7);
+        let result = list_logs(7, false);
         unsafe {
             env::remove_var("NOTEBOOK_PATH");
         }
@@ -402,7 +415,7 @@ mod tests {
         unsafe {
             env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
         }
-        let result = list_logs(7);
+        let result = list_logs(7, false);
         unsafe {
             env::remove_var("NOTEBOOK_PATH");
         }
@@ -417,7 +430,7 @@ mod tests {
         unsafe {
             env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
         }
-        let result = list_logs(7);
+        let result = list_logs(7, false);
         unsafe {
             env::remove_var("NOTEBOOK_PATH");
         }

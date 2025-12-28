@@ -36,5 +36,8 @@ pub enum LogAction {
         /// Number of days to show (default: 7)
         #[arg(short, long, default_value = "7")]
         days: usize,
+        /// Show unfinished TODOs under each day
+        #[arg(long)]
+        show_unfinished: bool,
     },
 }
