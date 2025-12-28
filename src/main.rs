@@ -1,4 +1,5 @@
 mod cli;
+mod editor;
 mod notebook;
 
 use clap::Parser;

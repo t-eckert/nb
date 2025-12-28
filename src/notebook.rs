@@ -2,8 +2,9 @@ use chrono::{Duration, Local, NaiveDate};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 use std::collections::BTreeMap;
+
+use crate::editor::Editor;
 
 pub fn get_notebook_path() -> PathBuf {
     env::var("NOTEBOOK_PATH")
@@ -12,10 +13,6 @@ pub fn get_notebook_path() -> PathBuf {
             let home = env::var("HOME").expect("HOME environment variable not set");
             PathBuf::from(home).join("Notebook")
         })
-}
-
-fn get_editor() -> String {
-    env::var("EDITOR").unwrap_or_else(|_| "vim".to_string())
 }
 
 fn get_date_offset(yesterday: bool, tomorrow: bool, date_str: Option<&str>) -> Result<NaiveDate, String> {
@@ -82,15 +79,8 @@ pub fn edit_log(yesterday: bool, tomorrow: bool, date_str: Option<&str>) -> Resu
     }
 
     // Open the log in the user's editor
-    let editor = get_editor();
-    let status = Command::new(&editor)
-        .arg(&log_path)
-        .status()
-        .map_err(|e| format!("Failed to open editor '{}': {}", editor, e))?;
-
-    if !status.success() {
-        return Err(format!("Editor exited with non-zero status"));
-    }
+    let editor = Editor::new();
+    editor.open(&log_path)?;
 
     Ok(())
 }
