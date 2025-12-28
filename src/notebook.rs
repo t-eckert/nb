@@ -281,3 +281,242 @@ pub fn list_logs(days: usize) -> Result<(), String> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::env;
+    use tempfile::TempDir;
+
+    fn create_test_log(dir: &PathBuf, date: &str, content: &str) -> std::io::Result<()> {
+        let log_path = dir.join(format!("{}.md", date));
+        fs::write(log_path, content)
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_notebook_path_with_env_var() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_path = temp_dir.path().to_str().unwrap();
+
+        unsafe {
+            env::set_var("NOTEBOOK_PATH", test_path);
+        }
+        let result = get_notebook_path();
+        unsafe {
+            env::remove_var("NOTEBOOK_PATH");
+        }
+
+        assert_eq!(result.to_str().unwrap(), test_path);
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_notebook_path_default() {
+        unsafe {
+            env::remove_var("NOTEBOOK_PATH");
+        }
+        let result = get_notebook_path();
+        let home = env::var("HOME").unwrap();
+        let expected = PathBuf::from(home).join("Notebook");
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_find_unchecked_todos() {
+        let content = r#"# Test Log
+
+## Personal
+
+- [x] Completed task
+- [ ] Unchecked task 1
+- [ ] Unchecked task 2
+- [x] Another completed task
+
+## Notes
+"#;
+
+        let todos = find_unchecked_todos(content);
+        assert_eq!(todos.len(), 2);
+        assert!(todos[0].contains("Unchecked task 1"));
+        assert!(todos[1].contains("Unchecked task 2"));
+    }
+
+    #[test]
+    fn test_find_unchecked_todos_with_indentation() {
+        let content = r#"
+  - [ ] Indented unchecked
+    - [ ] More indented
+- [x] Completed
+"#;
+
+        let todos = find_unchecked_todos(content);
+        assert_eq!(todos.len(), 2);
+    }
+
+    #[test]
+    #[serial]
+    fn test_list_logs_with_todos() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        // Create test logs
+        let today = Local::now().date_naive();
+        let yesterday = today - Duration::days(1);
+
+        create_test_log(
+            &log_dir,
+            &today.format("%Y-%m-%d").to_string(),
+            "# Today\n- [x] Done\n- [ ] Not done\n",
+        )
+        .unwrap();
+
+        create_test_log(
+            &log_dir,
+            &yesterday.format("%Y-%m-%d").to_string(),
+            "# Yesterday\n- [x] Task 1\n- [x] Task 2\n",
+        )
+        .unwrap();
+
+        unsafe {
+            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
+        }
+        let result = list_logs(7);
+        unsafe {
+            env::remove_var("NOTEBOOK_PATH");
+        }
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn test_list_logs_empty_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        unsafe {
+            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
+        }
+        let result = list_logs(7);
+        unsafe {
+            env::remove_var("NOTEBOOK_PATH");
+        }
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn test_list_logs_nonexistent_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        unsafe {
+            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
+        }
+        let result = list_logs(7);
+        unsafe {
+            env::remove_var("NOTEBOOK_PATH");
+        }
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Log directory does not exist"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_rollover_todos_basic() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        let template_dir = temp_dir.path().join("+Templates");
+        fs::create_dir_all(&log_dir).unwrap();
+        fs::create_dir_all(&template_dir).unwrap();
+
+        // Create template
+        let template_path = template_dir.join("Daily Note.md");
+        fs::write(
+            template_path,
+            "# {{date:ddd D MMMM YYYY}}\n\n## Personal\n\n## Notes\n",
+        )
+        .unwrap();
+
+        // Create today's log with unchecked TODOs
+        let today = Local::now().date_naive();
+        create_test_log(
+            &log_dir,
+            &today.format("%Y-%m-%d").to_string(),
+            "# Today\n\n## Personal\n\n- [x] Done task\n- [ ] Todo 1\n- [ ] Todo 2\n",
+        )
+        .unwrap();
+
+        unsafe {
+            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
+        }
+        let result = rollover_todos();
+        unsafe {
+            env::remove_var("NOTEBOOK_PATH");
+        }
+
+        assert!(result.is_ok());
+
+        // Check that tomorrow's log was created
+        let tomorrow = today + Duration::days(1);
+        let tomorrow_path = log_dir.join(format!("{}.md", tomorrow.format("%Y-%m-%d")));
+        assert!(tomorrow_path.exists());
+
+        // Check that todos were rolled over
+        let tomorrow_content = fs::read_to_string(tomorrow_path).unwrap();
+        assert!(tomorrow_content.contains("Todo 1"));
+        assert!(tomorrow_content.contains("Todo 2"));
+        assert!(tomorrow_content.contains("Rolled over from"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_rollover_todos_no_unchecked() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        // Create today's log with only completed TODOs
+        let today = Local::now().date_naive();
+        create_test_log(
+            &log_dir,
+            &today.format("%Y-%m-%d").to_string(),
+            "# Today\n\n- [x] All done\n- [x] Everything complete\n",
+        )
+        .unwrap();
+
+        unsafe {
+            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
+        }
+        let result = rollover_todos();
+        unsafe {
+            env::remove_var("NOTEBOOK_PATH");
+        }
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn test_rollover_todos_missing_today_log() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        unsafe {
+            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
+        }
+        let result = rollover_todos();
+        unsafe {
+            env::remove_var("NOTEBOOK_PATH");
+        }
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+}
