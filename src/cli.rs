@@ -28,6 +28,9 @@ pub enum LogAction {
         /// Edit tomorrow's log
         #[arg(long)]
         tomorrow: bool,
+        /// Edit log for a specific date (YYYY-MM-DD)
+        #[arg(short, long)]
+        date: Option<String>,
     },
     /// Rollover unfinished TODOs to the next day
     Rollover,

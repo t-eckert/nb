@@ -18,15 +18,21 @@ fn get_editor() -> String {
     env::var("EDITOR").unwrap_or_else(|_| "vim".to_string())
 }
 
-fn get_date_offset(yesterday: bool, tomorrow: bool) -> NaiveDate {
+fn get_date_offset(yesterday: bool, tomorrow: bool, date_str: Option<&str>) -> Result<NaiveDate, String> {
+    // If a specific date is provided, use it
+    if let Some(date) = date_str {
+        return NaiveDate::parse_from_str(date, "%Y-%m-%d")
+            .map_err(|_| format!("Invalid date format: {}. Expected YYYY-MM-DD", date));
+    }
+
     let today = Local::now().date_naive();
 
     if yesterday {
-        today - Duration::days(1)
+        Ok(today - Duration::days(1))
     } else if tomorrow {
-        today + Duration::days(1)
+        Ok(today + Duration::days(1))
     } else {
-        today
+        Ok(today)
     }
 }
 
@@ -65,8 +71,8 @@ fn create_log_from_template(log_path: &PathBuf, date: NaiveDate) -> Result<(), S
     Ok(())
 }
 
-pub fn edit_log(yesterday: bool, tomorrow: bool) -> Result<(), String> {
-    let date = get_date_offset(yesterday, tomorrow);
+pub fn edit_log(yesterday: bool, tomorrow: bool, date_str: Option<&str>) -> Result<(), String> {
+    let date = get_date_offset(yesterday, tomorrow, date_str)?;
     let log_path = get_log_path(date);
 
     // Create the log file if it doesn't exist
