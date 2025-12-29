@@ -11,6 +11,33 @@ pub struct Config {
     pub notebook_path: Option<String>,
     /// Editor command to use
     pub editor: Option<String>,
+    /// Agent configuration
+    #[serde(default)]
+    pub agent: AgentConfig,
+}
+
+/// Agent-specific configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentConfig {
+    /// Agent provider (e.g., "claude", "ollama", "mock")
+    pub provider: Option<String>,
+    /// Model to use
+    pub model: Option<String>,
+    /// API key (for cloud providers)
+    pub api_key: Option<String>,
+    /// Custom endpoint URL (for local providers like Ollama)
+    pub endpoint: Option<String>,
+}
+
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self {
+            provider: None,
+            model: None,
+            api_key: None,
+            endpoint: None,
+        }
+    }
 }
 
 impl Config {
@@ -19,6 +46,7 @@ impl Config {
         Self {
             notebook_path: None,
             editor: None,
+            agent: AgentConfig::default(),
         }
     }
 
@@ -119,6 +147,84 @@ impl Config {
     /// Sets the editor
     pub fn set_editor(&mut self, editor: String) {
         self.editor = Some(editor);
+    }
+
+    /// Gets the agent provider with fallback priority:
+    /// 1. Config file value
+    /// 2. NB_AGENT_PROVIDER environment variable
+    /// 3. "mock" default
+    pub fn get_agent_provider(&self) -> String {
+        // Priority 1: Config file
+        if let Some(provider) = &self.agent.provider {
+            return provider.clone();
+        }
+
+        // Priority 2: Environment variable
+        if let Ok(provider) = env::var("NB_AGENT_PROVIDER") {
+            return provider;
+        }
+
+        // Priority 3: Default
+        "mock".to_string()
+    }
+
+    /// Gets the agent model with fallback priority:
+    /// 1. Config file value
+    /// 2. NB_AGENT_MODEL environment variable
+    /// 3. Provider-specific default
+    pub fn get_agent_model(&self) -> String {
+        // Priority 1: Config file
+        if let Some(model) = &self.agent.model {
+            return model.clone();
+        }
+
+        // Priority 2: Environment variable
+        if let Ok(model) = env::var("NB_AGENT_MODEL") {
+            return model;
+        }
+
+        // Priority 3: Provider-specific defaults
+        match self.get_agent_provider().as_str() {
+            "claude" => "claude-sonnet-4".to_string(),
+            "ollama" => "llama3".to_string(),
+            _ => "mock-model".to_string(),
+        }
+    }
+
+    /// Gets the agent API key with fallback to environment variable
+    pub fn get_agent_api_key(&self) -> Option<String> {
+        // Priority 1: Config file
+        if let Some(key) = &self.agent.api_key {
+            return Some(key.clone());
+        }
+
+        // Priority 2: ANTHROPIC_API_KEY for Claude
+        if self.get_agent_provider() == "claude" {
+            if let Ok(key) = env::var("ANTHROPIC_API_KEY") {
+                return Some(key);
+            }
+        }
+
+        None
+    }
+
+    /// Gets the agent endpoint with fallback to environment variable
+    pub fn get_agent_endpoint(&self) -> Option<String> {
+        // Priority 1: Config file
+        if let Some(endpoint) = &self.agent.endpoint {
+            return Some(endpoint.clone());
+        }
+
+        // Priority 2: Environment variable
+        if let Ok(endpoint) = env::var("NB_AGENT_ENDPOINT") {
+            return Some(endpoint);
+        }
+
+        // Priority 3: Provider defaults
+        match self.get_agent_provider().as_str() {
+            "ollama" => Some("http://localhost:11434".to_string()),
+            _ => None,
+        }
     }
 }
 
