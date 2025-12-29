@@ -1,20 +1,11 @@
 use chrono::{Duration, Local, NaiveDate};
 use std::collections::BTreeMap;
-use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::config::Config;
 use crate::document::Document;
 use crate::editor::Editor;
-
-pub fn get_notebook_path() -> PathBuf {
-    env::var("NOTEBOOK_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let home = env::var("HOME").expect("HOME environment variable not set");
-            PathBuf::from(home).join("Notebook")
-        })
-}
 
 fn get_date_offset(
     yesterday: bool,
@@ -38,14 +29,18 @@ fn get_date_offset(
     }
 }
 
-fn get_log_path(date: NaiveDate) -> PathBuf {
-    let notebook_path = get_notebook_path();
+fn get_log_path(config: &Config, date: NaiveDate) -> PathBuf {
+    let notebook_path = config.get_notebook_path();
     let filename = format!("{}.md", date.format("%Y-%m-%d"));
     notebook_path.join("Log").join(filename)
 }
 
-fn create_log_from_template(log_path: &PathBuf, date: NaiveDate) -> Result<(), String> {
-    let notebook_path = get_notebook_path();
+fn create_log_from_template(
+    config: &Config,
+    log_path: &PathBuf,
+    date: NaiveDate,
+) -> Result<(), String> {
+    let notebook_path = config.get_notebook_path();
     let template_path = notebook_path.join("+Templates").join("Daily Note.md");
 
     // Read the template as a Document
@@ -73,18 +68,23 @@ fn create_log_from_template(log_path: &PathBuf, date: NaiveDate) -> Result<(), S
     Ok(())
 }
 
-pub fn edit_log(yesterday: bool, tomorrow: bool, date_str: Option<&str>) -> Result<(), String> {
+pub fn edit_log(
+    config: &Config,
+    yesterday: bool,
+    tomorrow: bool,
+    date_str: Option<&str>,
+) -> Result<(), String> {
     let date = get_date_offset(yesterday, tomorrow, date_str)?;
-    let log_path = get_log_path(date);
+    let log_path = get_log_path(config, date);
 
     // Create the log file if it doesn't exist
     if !log_path.exists() {
         println!("Creating new log for {}", date.format("%a %-d %B %Y"));
-        create_log_from_template(&log_path, date)?;
+        create_log_from_template(config, &log_path, date)?;
     }
 
     // Open the log in the user's editor
-    let editor = Editor::new();
+    let editor = Editor::from_config(config);
     editor.open(&log_path)?;
 
     Ok(())
@@ -98,12 +98,12 @@ fn find_unchecked_todos(content: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn rollover_todos() -> Result<(), String> {
+pub fn rollover_todos(config: &Config) -> Result<(), String> {
     let today = Local::now().date_naive();
     let tomorrow = today + Duration::days(1);
 
-    let today_path = get_log_path(today);
-    let tomorrow_path = get_log_path(tomorrow);
+    let today_path = get_log_path(config, today);
+    let tomorrow_path = get_log_path(config, tomorrow);
 
     // Check if today's log exists
     if !today_path.exists() {
@@ -138,7 +138,7 @@ pub fn rollover_todos() -> Result<(), String> {
             "\nCreating tomorrow's log for {}",
             tomorrow.format("%a %-d %B %Y")
         );
-        create_log_from_template(&tomorrow_path, tomorrow)?;
+        create_log_from_template(config, &tomorrow_path, tomorrow)?;
     }
 
     // Read tomorrow's log
@@ -195,8 +195,8 @@ pub fn rollover_todos() -> Result<(), String> {
     Ok(())
 }
 
-pub fn list_logs(days: usize, show_unfinished: bool) -> Result<(), String> {
-    let notebook_path = get_notebook_path();
+pub fn list_logs(config: &Config, days: usize, show_unfinished: bool) -> Result<(), String> {
+    let notebook_path = config.get_notebook_path();
     let log_dir = notebook_path.join("Log");
 
     // Check if Log directory exists
@@ -303,8 +303,6 @@ pub fn list_logs(days: usize, show_unfinished: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
-    use std::env;
     use tempfile::TempDir;
 
     fn create_test_log(dir: &PathBuf, date: &str, content: &str) -> std::io::Result<()> {
@@ -312,34 +310,10 @@ mod tests {
         fs::write(log_path, content)
     }
 
-    #[test]
-    #[serial]
-    fn test_get_notebook_path_with_env_var() {
-        let temp_dir = TempDir::new().unwrap();
-        let test_path = temp_dir.path().to_str().unwrap();
-
-        unsafe {
-            env::set_var("NOTEBOOK_PATH", test_path);
-        }
-        let result = get_notebook_path();
-        unsafe {
-            env::remove_var("NOTEBOOK_PATH");
-        }
-
-        assert_eq!(result.to_str().unwrap(), test_path);
-    }
-
-    #[test]
-    #[serial]
-    fn test_get_notebook_path_default() {
-        unsafe {
-            env::remove_var("NOTEBOOK_PATH");
-        }
-        let result = get_notebook_path();
-        let home = env::var("HOME").unwrap();
-        let expected = PathBuf::from(home).join("Notebook");
-
-        assert_eq!(result, expected);
+    fn create_test_config(notebook_path: &str) -> Config {
+        let mut config = Config::new();
+        config.set_notebook_path(notebook_path.to_string());
+        config
     }
 
     #[test]
@@ -375,7 +349,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_list_logs_with_todos() {
         let temp_dir = TempDir::new().unwrap();
         let log_dir = temp_dir.path().join("Log");
@@ -399,53 +372,36 @@ mod tests {
         )
         .unwrap();
 
-        unsafe {
-            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
-        }
-        let result = list_logs(7, false);
-        unsafe {
-            env::remove_var("NOTEBOOK_PATH");
-        }
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = list_logs(&config, 7, false);
 
         assert!(result.is_ok());
     }
 
     #[test]
-    #[serial]
     fn test_list_logs_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
         let log_dir = temp_dir.path().join("Log");
         fs::create_dir_all(&log_dir).unwrap();
 
-        unsafe {
-            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
-        }
-        let result = list_logs(7, false);
-        unsafe {
-            env::remove_var("NOTEBOOK_PATH");
-        }
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = list_logs(&config, 7, false);
 
         assert!(result.is_ok());
     }
 
     #[test]
-    #[serial]
     fn test_list_logs_nonexistent_directory() {
         let temp_dir = TempDir::new().unwrap();
-        unsafe {
-            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
-        }
-        let result = list_logs(7, false);
-        unsafe {
-            env::remove_var("NOTEBOOK_PATH");
-        }
+
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = list_logs(&config, 7, false);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Log directory does not exist"));
     }
 
     #[test]
-    #[serial]
     fn test_rollover_todos_basic() {
         let temp_dir = TempDir::new().unwrap();
         let log_dir = temp_dir.path().join("Log");
@@ -470,13 +426,8 @@ mod tests {
         )
         .unwrap();
 
-        unsafe {
-            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
-        }
-        let result = rollover_todos();
-        unsafe {
-            env::remove_var("NOTEBOOK_PATH");
-        }
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = rollover_todos(&config);
 
         assert!(result.is_ok());
 
@@ -493,7 +444,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_rollover_todos_no_unchecked() {
         let temp_dir = TempDir::new().unwrap();
         let log_dir = temp_dir.path().join("Log");
@@ -508,31 +458,20 @@ mod tests {
         )
         .unwrap();
 
-        unsafe {
-            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
-        }
-        let result = rollover_todos();
-        unsafe {
-            env::remove_var("NOTEBOOK_PATH");
-        }
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = rollover_todos(&config);
 
         assert!(result.is_ok());
     }
 
     #[test]
-    #[serial]
     fn test_rollover_todos_missing_today_log() {
         let temp_dir = TempDir::new().unwrap();
         let log_dir = temp_dir.path().join("Log");
         fs::create_dir_all(&log_dir).unwrap();
 
-        unsafe {
-            env::set_var("NOTEBOOK_PATH", temp_dir.path().to_str().unwrap());
-        }
-        let result = rollover_todos();
-        unsafe {
-            env::remove_var("NOTEBOOK_PATH");
-        }
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = rollover_todos(&config);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not exist"));

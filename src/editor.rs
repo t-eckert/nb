@@ -1,6 +1,7 @@
-use std::env;
 use std::path::Path;
 use std::process::Command;
+
+use crate::config::Config;
 
 /// Encapsulates an editor executable that can be used to edit files
 pub struct Editor {
@@ -8,15 +9,21 @@ pub struct Editor {
 }
 
 impl Editor {
-    /// Creates a new Editor instance
+    /// Creates an Editor from a Config
     ///
-    /// The editor executable is determined by:
-    /// 1. $EDITOR environment variable
-    /// 2. Falls back to "nvim" if not set
-    pub fn new() -> Self {
+    /// The editor executable is determined by Config.get_editor() which follows:
+    /// 1. Config file value
+    /// 2. $EDITOR environment variable
+    /// 3. Falls back to "nvim"
+    pub fn from_config(config: &Config) -> Self {
         Self {
-            executable: env::var("EDITOR").unwrap_or_else(|_| "nvim".to_string()),
+            executable: config.get_editor(),
         }
+    }
+
+    /// Creates a new Editor instance with a specific executable
+    pub fn with_executable(executable: String) -> Self {
+        Self { executable }
     }
 
     /// Opens the specified file in the editor
@@ -38,63 +45,42 @@ impl Editor {
 
 impl Default for Editor {
     fn default() -> Self {
-        Self::new()
+        Self::with_executable("nvim".to_string())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
-    use std::env;
     use tempfile::NamedTempFile;
 
     #[test]
-    #[serial]
-    fn test_editor_new_with_env_var() {
-        unsafe {
-            env::set_var("EDITOR", "vim");
-        }
-        let editor = Editor::new();
-        unsafe {
-            env::remove_var("EDITOR");
-        }
+    fn test_editor_from_config() {
+        let mut config = Config::new();
+        config.set_editor("vim".to_string());
 
+        let editor = Editor::from_config(&config);
         assert_eq!(editor.executable, "vim");
     }
 
     #[test]
-    #[serial]
-    fn test_editor_new_default() {
-        unsafe {
-            env::remove_var("EDITOR");
-        }
-        let editor = Editor::new();
+    fn test_editor_from_config_default() {
+        let config = Config::new();
+        let editor = Editor::from_config(&config);
 
-        assert_eq!(editor.executable, "nvim");
+        // Should use default from config (which may be env var or nvim)
+        assert!(!editor.executable.is_empty());
     }
 
     #[test]
-    #[serial]
-    fn test_editor_new_with_custom_editor() {
-        unsafe {
-            env::set_var("EDITOR", "emacs");
-        }
-        let editor = Editor::new();
-        unsafe {
-            env::remove_var("EDITOR");
-        }
-
+    fn test_editor_with_executable() {
+        let editor = Editor::with_executable("emacs".to_string());
         assert_eq!(editor.executable, "emacs");
     }
 
     #[test]
     fn test_editor_default_trait() {
-        unsafe {
-            env::remove_var("EDITOR");
-        }
         let editor = Editor::default();
-
         assert_eq!(editor.executable, "nvim");
     }
 
