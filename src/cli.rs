@@ -23,10 +23,10 @@ pub enum LogAction {
     /// Edit a daily log
     Edit {
         /// Edit yesterday's log
-        #[arg(long)]
+        #[arg(short, long)]
         yesterday: bool,
         /// Edit tomorrow's log
-        #[arg(long)]
+        #[arg(short, long)]
         tomorrow: bool,
         /// Edit log for a specific date (YYYY-MM-DD)
         #[arg(short, long)]
@@ -35,10 +35,10 @@ pub enum LogAction {
     /// View a daily log
     View {
         /// View yesterday's log
-        #[arg(long)]
+        #[arg(short, long)]
         yesterday: bool,
         /// View tomorrow's log
-        #[arg(long)]
+        #[arg(short, long)]
         tomorrow: bool,
         /// View log for a specific date (YYYY-MM-DD)
         #[arg(short, long)]
