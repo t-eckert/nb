@@ -1,4 +1,5 @@
 mod cli;
+mod document;
 mod editor;
 mod notebook;
 
@@ -16,7 +17,10 @@ fn main() {
                 date,
             } => notebook::edit_log(yesterday, tomorrow, date.as_deref()),
             LogAction::Rollover => notebook::rollover_todos(),
-            LogAction::List { days, show_unfinished } => notebook::list_logs(days, show_unfinished),
+            LogAction::List {
+                days,
+                show_unfinished,
+            } => notebook::list_logs(days, show_unfinished),
         },
     };
 

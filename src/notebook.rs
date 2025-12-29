@@ -1,8 +1,8 @@
 use chrono::{Duration, Local, NaiveDate};
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::collections::BTreeMap;
 
 use crate::editor::Editor;
 
@@ -15,7 +15,11 @@ pub fn get_notebook_path() -> PathBuf {
         })
 }
 
-fn get_date_offset(yesterday: bool, tomorrow: bool, date_str: Option<&str>) -> Result<NaiveDate, String> {
+fn get_date_offset(
+    yesterday: bool,
+    tomorrow: bool,
+    date_str: Option<&str>,
+) -> Result<NaiveDate, String> {
     // If a specific date is provided, use it
     if let Some(date) = date_str {
         return NaiveDate::parse_from_str(date, "%Y-%m-%d")
@@ -199,12 +203,15 @@ pub fn list_logs(days: usize, show_unfinished: bool) -> Result<(), String> {
 
     // Check if Log directory exists
     if !log_dir.exists() {
-        return Err(format!("Log directory does not exist: {}", log_dir.display()));
+        return Err(format!(
+            "Log directory does not exist: {}",
+            log_dir.display()
+        ));
     }
 
     // Read all files in the Log directory
-    let entries = fs::read_dir(&log_dir)
-        .map_err(|e| format!("Failed to read Log directory: {}", e))?;
+    let entries =
+        fs::read_dir(&log_dir).map_err(|e| format!("Failed to read Log directory: {}", e))?;
 
     // Parse dates from filenames and store in a sorted map
     let mut logs: BTreeMap<NaiveDate, PathBuf> = BTreeMap::new();
@@ -244,26 +251,31 @@ pub fn list_logs(days: usize, show_unfinished: bool) -> Result<(), String> {
 
     for (date, path) in recent_logs {
         // Try to read the file and count TODOs
-        let (total_todos, completed_todos, unchecked_todos) = if let Ok(content) = fs::read_to_string(path) {
-            let total = content.lines().filter(|line| {
-                let trimmed = line.trim_start();
-                trimmed.starts_with("- [ ]") || trimmed.starts_with("- [x]")
-            }).count();
+        let (total_todos, completed_todos, unchecked_todos) =
+            if let Ok(content) = fs::read_to_string(path) {
+                let total = content
+                    .lines()
+                    .filter(|line| {
+                        let trimmed = line.trim_start();
+                        trimmed.starts_with("- [ ]") || trimmed.starts_with("- [x]")
+                    })
+                    .count();
 
-            let completed = content.lines().filter(|line| {
-                line.trim_start().starts_with("- [x]")
-            }).count();
+                let completed = content
+                    .lines()
+                    .filter(|line| line.trim_start().starts_with("- [x]"))
+                    .count();
 
-            let unchecked: Vec<String> = if show_unfinished {
-                find_unchecked_todos(&content)
+                let unchecked: Vec<String> = if show_unfinished {
+                    find_unchecked_todos(&content)
+                } else {
+                    Vec::new()
+                };
+
+                (total, completed, unchecked)
             } else {
-                Vec::new()
+                (0, 0, Vec::new())
             };
-
-            (total, completed, unchecked)
-        } else {
-            (0, 0, Vec::new())
-        };
 
         // Format the output
         let day_name = date.format("%a").to_string();
@@ -275,10 +287,7 @@ pub fn list_logs(days: usize, show_unfinished: bool) -> Result<(), String> {
             String::new()
         };
 
-        println!("{} ({}){}",
-                 date_str,
-                 day_name,
-                 todo_info);
+        println!("{} ({}){}", date_str, day_name, todo_info);
 
         // Show unfinished TODOs if requested
         if show_unfinished && !unchecked_todos.is_empty() {
