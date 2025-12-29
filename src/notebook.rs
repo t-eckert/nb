@@ -4,6 +4,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::document::Document;
 use crate::editor::Editor;
 
 pub fn get_notebook_path() -> PathBuf {
@@ -47,14 +48,14 @@ fn create_log_from_template(log_path: &PathBuf, date: NaiveDate) -> Result<(), S
     let notebook_path = get_notebook_path();
     let template_path = notebook_path.join("+Templates").join("Daily Note.md");
 
-    // Read the template
-    let template = fs::read_to_string(&template_path)
-        .map_err(|e| format!("Failed to read template: {}", e))?;
+    // Read the template as a Document
+    let mut template_doc = Document::from_file(&template_path)?;
 
     // Replace template placeholders with actual date
     // Format: "Sat 27 December 2025"
     let date_str = date.format("%a %-d %B %Y").to_string();
-    let content = template
+    template_doc.content = template_doc
+        .content
         .replace("{{date:ddd D MMMM YYYY}}", &date_str)
         .replace(
             "{{date:D MMMM YYYY}}",
@@ -66,8 +67,8 @@ fn create_log_from_template(log_path: &PathBuf, date: NaiveDate) -> Result<(), S
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create Log directory: {}", e))?;
     }
 
-    // Write the file
-    fs::write(log_path, content).map_err(|e| format!("Failed to write log file: {}", e))?;
+    // Write the document
+    template_doc.to_file(log_path)?;
 
     Ok(())
 }
@@ -113,11 +114,10 @@ pub fn rollover_todos() -> Result<(), String> {
     }
 
     // Read today's log
-    let today_content = fs::read_to_string(&today_path)
-        .map_err(|e| format!("Failed to read today's log: {}", e))?;
+    let today_doc = Document::from_file(&today_path)?;
 
     // Find unchecked TODOs
-    let unchecked_todos = find_unchecked_todos(&today_content);
+    let unchecked_todos = find_unchecked_todos(&today_doc.content);
 
     if unchecked_todos.is_empty() {
         println!("No unchecked TODOs to roll over!");
@@ -142,11 +142,10 @@ pub fn rollover_todos() -> Result<(), String> {
     }
 
     // Read tomorrow's log
-    let tomorrow_content = fs::read_to_string(&tomorrow_path)
-        .map_err(|e| format!("Failed to read tomorrow's log: {}", e))?;
+    let mut tomorrow_doc = Document::from_file(&tomorrow_path)?;
 
     // Find the ## Personal section and insert TODOs after it
-    let mut lines: Vec<String> = tomorrow_content.lines().map(|s| s.to_string()).collect();
+    let mut lines: Vec<String> = tomorrow_doc.content.lines().map(|s| s.to_string()).collect();
     let personal_idx = lines.iter().position(|line| line.trim() == "## Personal");
 
     let insert_idx = match personal_idx {
@@ -183,10 +182,9 @@ pub fn rollover_todos() -> Result<(), String> {
         lines.insert(insert_idx + 3 + i, todo.clone());
     }
 
-    // Write the updated tomorrow's log
-    let new_content = lines.join("\n") + "\n";
-    fs::write(&tomorrow_path, new_content)
-        .map_err(|e| format!("Failed to write tomorrow's log: {}", e))?;
+    // Update the document content and write it
+    tomorrow_doc.content = lines.join("\n") + "\n";
+    tomorrow_doc.to_file(&tomorrow_path)?;
 
     println!(
         "\nSuccessfully rolled over {} TODO(s) to {}",
@@ -252,8 +250,9 @@ pub fn list_logs(days: usize, show_unfinished: bool) -> Result<(), String> {
     for (date, path) in recent_logs {
         // Try to read the file and count TODOs
         let (total_todos, completed_todos, unchecked_todos) =
-            if let Ok(content) = fs::read_to_string(path) {
-                let total = content
+            if let Ok(doc) = Document::from_file(path) {
+                let total = doc
+                    .content
                     .lines()
                     .filter(|line| {
                         let trimmed = line.trim_start();
@@ -261,13 +260,14 @@ pub fn list_logs(days: usize, show_unfinished: bool) -> Result<(), String> {
                     })
                     .count();
 
-                let completed = content
+                let completed = doc
+                    .content
                     .lines()
                     .filter(|line| line.trim_start().starts_with("- [x]"))
                     .count();
 
                 let unchecked: Vec<String> = if show_unfinished {
-                    find_unchecked_todos(&content)
+                    find_unchecked_todos(&doc.content)
                 } else {
                     Vec::new()
                 };
