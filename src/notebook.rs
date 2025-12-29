@@ -90,6 +90,33 @@ pub fn edit_log(
     Ok(())
 }
 
+pub fn view_log(
+    config: &Config,
+    yesterday: bool,
+    tomorrow: bool,
+    date_str: Option<&str>,
+) -> Result<(), String> {
+    let date = get_date_offset(yesterday, tomorrow, date_str)?;
+    let log_path = get_log_path(config, date);
+
+    // Check if the log file exists
+    if !log_path.exists() {
+        return Err(format!(
+            "Log for {} does not exist: {}",
+            date.format("%a %-d %B %Y"),
+            log_path.display()
+        ));
+    }
+
+    // Read and display the log
+    let doc = Document::from_file(&log_path)?;
+
+    // Print the full document (with frontmatter if present)
+    print!("{}", doc.to_string());
+
+    Ok(())
+}
+
 fn find_unchecked_todos(content: &str) -> Vec<String> {
     content
         .lines()
@@ -475,5 +502,75 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_view_log_existing() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        let today = Local::now().date_naive();
+        let content = "# Test Log\n\n## Notes\n\nThis is a test.";
+        create_test_log(
+            &log_dir,
+            &today.format("%Y-%m-%d").to_string(),
+            content,
+        )
+        .unwrap();
+
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = view_log(&config, false, false, None);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_view_log_nonexistent() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = view_log(&config, false, false, None);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_view_log_yesterday() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        let yesterday = Local::now().date_naive() - Duration::days(1);
+        let content = "# Yesterday's Log";
+        create_test_log(
+            &log_dir,
+            &yesterday.format("%Y-%m-%d").to_string(),
+            content,
+        )
+        .unwrap();
+
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = view_log(&config, true, false, None);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_view_log_specific_date() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("Log");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        let content = "# Specific Date Log";
+        create_test_log(&log_dir, "2025-12-25", content).unwrap();
+
+        let config = create_test_config(temp_dir.path().to_str().unwrap());
+        let result = view_log(&config, false, false, Some("2025-12-25"));
+
+        assert!(result.is_ok());
     }
 }

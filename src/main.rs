@@ -28,6 +28,11 @@ fn main() {
                 tomorrow,
                 date,
             } => notebook::edit_log(&config, yesterday, tomorrow, date.as_deref()),
+            LogAction::View {
+                yesterday,
+                tomorrow,
+                date,
+            } => notebook::view_log(&config, yesterday, tomorrow, date.as_deref()),
             LogAction::Rollover => notebook::rollover_todos(&config),
             LogAction::List {
                 days,

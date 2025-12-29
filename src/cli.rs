@@ -32,6 +32,18 @@ pub enum LogAction {
         #[arg(short, long)]
         date: Option<String>,
     },
+    /// View a daily log
+    View {
+        /// View yesterday's log
+        #[arg(long)]
+        yesterday: bool,
+        /// View tomorrow's log
+        #[arg(long)]
+        tomorrow: bool,
+        /// View log for a specific date (YYYY-MM-DD)
+        #[arg(short, long)]
+        date: Option<String>,
+    },
     /// Rollover unfinished TODOs to the next day
     Rollover,
     /// List recent logs
