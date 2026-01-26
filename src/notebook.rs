@@ -1,7 +1,9 @@
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{DateTime, Duration, Local, NaiveDate};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 use crate::config::Config;
 use crate::document::Document;
@@ -334,6 +336,227 @@ pub fn list_logs(config: &Config, days: usize, show_unfinished: bool) -> Result<
 pub fn open(config: &Config) -> Result<(), String> {
     let notebook_path = config.get_notebook_path();
     println!("{}", notebook_path.display());
+    Ok(())
+}
+
+// Weather-related structs for OpenWeather API
+#[derive(Debug, Deserialize, Serialize)]
+struct WeatherResponse {
+    daily: Vec<DailyForecast>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct DailyForecast {
+    dt: i64,
+    temp: Temperature,
+    weather: Vec<WeatherCondition>,
+    pop: f64,
+    #[serde(default)]
+    rain: Option<f64>,
+    #[serde(default)]
+    snow: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Temperature {
+    min: f64,
+    max: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct WeatherCondition {
+    description: String,
+}
+
+fn get_api_key() -> Result<String, String> {
+    let output = Command::new("op")
+        .args(&["read", "op://Private/Open Weather Map/Notebook API Key"])
+        .output()
+        .map_err(|e| format!("Failed to execute 1Password CLI: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Failed to retrieve API key from 1Password: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let api_key = String::from_utf8(output.stdout)
+        .map_err(|e| format!("Invalid UTF-8 in API key: {}", e))?
+        .trim()
+        .to_string();
+
+    if api_key.is_empty() {
+        return Err("API key is empty".to_string());
+    }
+
+    Ok(api_key)
+}
+
+fn fetch_weather(api_key: &str) -> Result<WeatherResponse, String> {
+    let url = format!(
+        "https://api.openweathermap.org/data/3.0/onecall?lat=45.4215&lon=-75.6972&exclude=minutely,hourly,alerts&units=metric&appid={}",
+        api_key
+    );
+
+    let response = reqwest::blocking::get(&url)
+        .map_err(|e| format!("Failed to fetch weather data: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Weather API returned error status: {}",
+            response.status()
+        ));
+    }
+
+    let weather: WeatherResponse = response
+        .json()
+        .map_err(|e| format!("Failed to parse weather response: {}", e))?;
+
+    Ok(weather)
+}
+
+fn format_weather(forecast: &DailyForecast) -> String {
+    let high = forecast.temp.max.round() as i32;
+    let low = forecast.temp.min.round() as i32;
+    let description = capitalize_first_letter(&forecast.weather[0].description);
+
+    let mut weather_str = format!("Weather: High {}°C, Low {}°C. {}", high, low, description);
+
+    // Add cold weather alert
+    if low < -10 {
+        weather_str = format!("Weather: **Cold weather alert.** High {}°C, Low {}°C. {}", high, low, description);
+    }
+
+    // Add precipitation information
+    if let Some(snow_mm) = forecast.snow {
+        if snow_mm > 0.5 {
+            let snow_cm = (snow_mm / 10.0).round() as i32;
+            if snow_cm >= 1 {
+                weather_str.push_str(&format!(" {}cm snow accumulation expected.", snow_cm));
+            }
+        }
+    } else if let Some(rain_mm) = forecast.rain {
+        if rain_mm > 0.5 {
+            weather_str.push_str(&format!(" ({}% chance)", (forecast.pop * 100.0).round() as i32));
+        }
+    } else if forecast.pop > 0.2 {
+        weather_str.push_str(&format!(" ({}% chance)", (forecast.pop * 100.0).round() as i32));
+    }
+
+    weather_str.push('.');
+    weather_str
+}
+
+fn capitalize_first_letter(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+fn insert_weather_into_log(log_path: &PathBuf, weather_line: &str) -> Result<bool, String> {
+    // Read the log file
+    let mut doc = Document::from_file(log_path)?;
+
+    // Check if weather already exists
+    if doc.content.contains("Weather:") {
+        return Ok(false); // Weather already exists
+    }
+
+    // Split content into lines
+    let mut lines: Vec<String> = doc.content.lines().map(|s| s.to_string()).collect();
+
+    // Find the first heading line (starts with #)
+    let heading_idx = lines.iter().position(|line| line.starts_with('#'));
+
+    if let Some(idx) = heading_idx {
+        // Insert weather after the heading, with a blank line
+        lines.insert(idx + 1, String::new());
+        lines.insert(idx + 2, weather_line.to_string());
+    } else {
+        // No heading found, insert at the beginning
+        lines.insert(0, weather_line.to_string());
+        lines.insert(1, String::new());
+    }
+
+    // Update the document content and write it
+    doc.content = lines.join("\n") + "\n";
+    doc.to_file(log_path)?;
+
+    Ok(true) // Weather was added
+}
+
+pub fn add_weather(config: &Config, days: usize) -> Result<(), String> {
+    println!("Fetching weather forecast from OpenWeather API...");
+
+    // Get API key from 1Password
+    let api_key = get_api_key()?;
+
+    // Fetch weather data
+    let weather = fetch_weather(&api_key)?;
+
+    let today = Local::now().date_naive();
+    let mut added_count = 0;
+    let mut skipped_count = 0;
+    let mut summary: Vec<String> = Vec::new();
+
+    // Process each day's forecast
+    for i in 0..days.min(weather.daily.len()) {
+        let forecast = &weather.daily[i];
+        let forecast_datetime = DateTime::from_timestamp(forecast.dt, 0)
+            .ok_or("Invalid timestamp in weather data")?;
+        let forecast_date = forecast_datetime.date_naive();
+
+        // Only process dates from today onwards
+        if forecast_date < today {
+            continue;
+        }
+
+        let log_path = get_log_path(config, forecast_date);
+
+        // Create log if it doesn't exist
+        if !log_path.exists() {
+            create_log_from_template(config, &log_path, forecast_date)?;
+        }
+
+        // Format and insert weather
+        let weather_line = format_weather(forecast);
+        match insert_weather_into_log(&log_path, &weather_line) {
+            Ok(true) => {
+                added_count += 1;
+                summary.push(format!(
+                    "  {} ({}): {}",
+                    forecast_date.format("%Y-%m-%d"),
+                    forecast_date.format("%a"),
+                    weather_line.trim_start_matches("Weather: ")
+                ));
+            }
+            Ok(false) => {
+                skipped_count += 1;
+            }
+            Err(e) => {
+                eprintln!(
+                    "Warning: Failed to add weather for {}: {}",
+                    forecast_date.format("%Y-%m-%d"),
+                    e
+                );
+            }
+        }
+    }
+
+    // Print summary
+    println!("\nWeather forecast summary:");
+    println!("Added weather to {} day(s):", added_count);
+    for line in summary {
+        println!("{}", line);
+    }
+
+    if skipped_count > 0 {
+        println!("\nSkipped {} day(s) that already had weather.", skipped_count);
+    }
+
     Ok(())
 }
 

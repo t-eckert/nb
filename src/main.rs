@@ -38,6 +38,7 @@ fn main() {
                 days,
                 show_unfinished,
             } => notebook::list_logs(&config, days, show_unfinished),
+            LogAction::Weather { days } => notebook::add_weather(&config, days),
         },
         Commands::Open => notebook::open(&config),
     };

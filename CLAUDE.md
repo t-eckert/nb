@@ -23,6 +23,8 @@ cargo run -- log edit
 cargo run -- log edit --yesterday
 cargo run -- log edit --tomorrow
 cargo run -- log rollover
+cargo run -- log weather
+cargo run -- log weather --days 5
 ```
 
 ## Architecture
@@ -68,6 +70,14 @@ The `notebook` module interacts with the user's notebook directory:
 - `$NOTEBOOK_PATH` - Custom notebook location
 - `$EDITOR` - User's preferred editor (defaults to `vim`)
 
+**Weather Integration:**
+- Uses OpenWeather API One Call 3.0 for forecasts
+- API key retrieved from 1Password: `op://Private/Open Weather Map/Notebook API Key`
+- Location: Ottawa, Ontario (lat: 45.4215, lon: -75.6972)
+- Weather format: `Weather: High [max]°C, Low [min]°C. [Description].`
+- Automatic alerts for cold weather (< -10°C) and precipitation
+- Weather line inserted after the date heading, before first section
+
 ### Adding New `log` Subcommands
 
 When adding new actions to the `log` subcommand:
@@ -88,11 +98,14 @@ When adding new actions to the `log` subcommand:
 
 ### Implemented
 - `nb log edit` - Edit today's, yesterday's, or tomorrow's log
+- `nb log view` - View a daily log to stdout
 - `nb log rollover` - Roll over unchecked TODOs from today to tomorrow
+- `nb log list` - List recent logs with TODO completion stats
+- `nb log weather` - Add weather forecasts to upcoming logs (default: 7 days)
 
 ### Planned (not yet in code)
-- Additional `log` subcommands (list, search, stats, etc.)
-- `schedule` subcommand (weather, task planning)
+- Additional `log` subcommands (search, stats, etc.)
+- `schedule` subcommand (task planning)
 - `server` subcommand (HTML/JSON export)
 - `agent` subcommand (AI integration)
 

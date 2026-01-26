@@ -57,4 +57,10 @@ pub enum LogAction {
         #[arg(long)]
         show_unfinished: bool,
     },
+    /// Add weather forecasts to upcoming logs
+    Weather {
+        /// Number of days ahead to add weather for (default: 7)
+        #[arg(short, long, default_value = "7")]
+        days: usize,
+    },
 }
