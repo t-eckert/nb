@@ -39,6 +39,7 @@ fn main() {
                 show_unfinished,
             } => notebook::list_logs(&config, days, show_unfinished),
         },
+        Commands::Open => notebook::open(&config),
     };
 
     if let Err(e) = result {

@@ -16,6 +16,8 @@ pub enum Commands {
         #[command(subcommand)]
         action: LogAction,
     },
+    /// Print the notebook directory path
+    Open,
 }
 
 #[derive(Subcommand)]

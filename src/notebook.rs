@@ -327,6 +327,16 @@ pub fn list_logs(config: &Config, days: usize, show_unfinished: bool) -> Result<
     Ok(())
 }
 
+/// Print the notebook directory path to stdout
+///
+/// This is useful for shell integration. Users can use `cd $(nb open)` to change
+/// to the notebook directory.
+pub fn open(config: &Config) -> Result<(), String> {
+    let notebook_path = config.get_notebook_path();
+    println!("{}", notebook_path.display());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
